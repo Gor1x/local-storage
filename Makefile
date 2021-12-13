@@ -1,5 +1,5 @@
-CC=g++ -g -O3 -DNDEBUG
-#CC=g++ -g
+#CC=g++ -g -O3 -DNDEBUG
+CC=g++ -g
 PROTOC=$(PROTOBUF)/protoc
 
 PROTOBUF=./protobuf-3.18.1/src
@@ -27,14 +27,23 @@ simple_client.o: src/simple_client.cpp common
 client: client.o common
 	$(CC) -o client $(BIN)/client.o $(COMMON_O) $(LIB)
 
+client_simple_runner: client.o
+	$(CC) -o client $(BIN)/client.o $(COMMON_O) $(LIB)
+
 client.o: src/client.cpp common
 	$(CC) -c $(SRC)/client.cpp -o $(BIN)/client.o $(INC)
 
-server: server.o common
-	$(CC) -o server $(BIN)/server.o $(COMMON_O) $(LIB)
+server: PersistentHashTable.o server.o common
+	$(CC) -o server $(BIN)/server.o $(BIN)/PersistentHashTable.o $(COMMON_O) $(LIB)
 
-server.o: src/server.cpp common
+server_simple_runner: PersistentHashTable.o server.o
+	$(CC) -o server $(BIN)/server.o $(BIN)/PersistentHashTable.o $(COMMON_O) $(LIB)
+
+server.o: PersistentHashTable.o src/server.cpp common
 	$(CC) -c $(SRC)/server.cpp -o $(BIN)/server.o $(INC)
+
+PersistentHashTable.o:
+	$(CC) -c $(SRC)/PersistentHashTable.cpp -o $(BIN)/PersistentHashTable.o $(INC)
 
 # libs
 

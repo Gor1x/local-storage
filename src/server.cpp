@@ -2,6 +2,7 @@
 #include "../inc/log.h"
 #include "../inc/protocol.h"
 #include "../inc/rpc.h"
+#include "../inc/PersistentHashTable.h"
 
 #include <array>
 #include <cstdio>
@@ -198,7 +199,7 @@ int main(int argc, const char** argv)
      */
 
     // TODO on-disk storage
-    std::unordered_map<std::string, uint64_t> storage;
+    PersistentHashTable storage("htstorage");
 
     auto handle_get = [&] (const std::string& request) {
         NProto::TGetRequest get_request;
