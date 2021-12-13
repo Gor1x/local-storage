@@ -1,7 +1,7 @@
-#include "kv.pb.h"
-#include "log.h"
-#include "protocol.h"
-#include "rpc.h"
+#include "../kv.pb.h"
+#include "../inc/log.h"
+#include "../inc/protocol.h"
+#include "../inc/rpc.h"
 
 #include <array>
 #include <cstdio>

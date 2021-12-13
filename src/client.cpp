@@ -1,7 +1,7 @@
-#include "kv.pb.h"
-#include "log.h"
-#include "protocol.h"
-#include "rpc.h"
+#include "../kv.pb.h"
+#include "../inc/log.h"
+#include "../inc/protocol.h"
+#include "../inc/rpc.h"
 
 #include <array>
 #include <cstdlib>
@@ -26,7 +26,6 @@ using namespace NRpc;
 namespace {
 
 ////////////////////////////////////////////////////////////////////////////////
-// TODO extract common code from client and simple_client
 
 constexpr int max_events = 32;
 constexpr int timeout = 1000;
@@ -46,10 +45,15 @@ int main(int argc, const char** argv) {
     }
 
     const auto port = atoi(argv[1]);
-    const std::string key = argv[2];
-    int v = -1;
-    if (argc > 3) {
-        v = atoi(argv[3]);
+    const auto max_requests = atoi(argv[2]);
+    std::vector<std::string> stages;
+
+    for (int i = 3; i < argc; ++i) {
+        stages.push_back(argv[i]);
+    }
+
+    if (stages.empty()) {
+        stages = {"put", "get"};
     }
 
     /*
@@ -95,32 +99,68 @@ int main(int argc, const char** argv) {
     SocketState state;
     state.fd = socketfd;
 
-    if (v >= 0) {
-        NProto::TPutRequest put_request;
-        put_request.set_key(key);
-        put_request.set_offset(v);
+    /*
+     * generating requests
+     */
 
-        std::stringstream message;
-        serialize_header(PUT_REQUEST, put_request.ByteSizeLong(), message);
-        put_request.SerializeToOstream(&message);
+    auto generate_data = [] (int i) {
+        return i * 4;
+    };
 
-        state.output_queue.push_back(message.str());
-    } else {
-        NProto::TGetRequest get_request;
-        get_request.set_key(key);
+    uint64_t request_count = 0;
 
-        std::stringstream message;
-        serialize_header(GET_REQUEST, get_request.ByteSizeLong(), message);
-        get_request.SerializeToOstream(&message);
+    auto stage_put = [&] () {
+        for (int i = 0; i < max_requests; ++i) {
+            std::stringstream key;
+            key << "key" << i;
 
-        state.output_queue.push_back(message.str());
+            NProto::TPutRequest put_request;
+            put_request.set_request_id(request_count++);
+            put_request.set_key(key.str());
+            put_request.set_offset(generate_data(i));
+
+            std::stringstream message;
+            serialize_header(PUT_REQUEST, put_request.ByteSizeLong(), message);
+            put_request.SerializeToOstream(&message);
+
+            state.output_queue.push_back(message.str());
+        }
+    };
+
+    std::unordered_map<uint64_t, uint64_t> expected_gets;
+
+    auto stage_get = [&] () {
+        for (int i = 0; i < max_requests; ++i) {
+            std::stringstream key;
+            key << "key" << i;
+
+            NProto::TGetRequest get_request;
+            get_request.set_request_id(request_count++);
+            get_request.set_key(key.str());
+            expected_gets[get_request.request_id()] = generate_data(i);
+
+            std::stringstream message;
+            serialize_header(GET_REQUEST, get_request.ByteSizeLong(), message);
+            get_request.SerializeToOstream(&message);
+
+            state.output_queue.push_back(message.str());
+        }
+    };
+
+    std::unordered_map<std::string, std::function<void()>> stage2func = {
+        {"put", stage_put},
+        {"get", stage_get},
+    };
+
+    for (const auto& stage: stages) {
+        stage2func.at(stage)();
     }
 
     /*
      * handler function
      */
 
-    bool have_response = false;
+    int response_count = 0;
 
     auto handle_get = [&] (const std::string& response) {
         NProto::TGetResponse get_response;
@@ -130,9 +170,20 @@ int main(int argc, const char** argv) {
             abort();
         }
 
-        LOG_INFO_S("get_response: " << get_response.ShortDebugString());
+        LOG_DEBUG_S("get_response: " << get_response.ShortDebugString());
 
-        have_response = true;
+        auto it = expected_gets.find(get_response.request_id());
+        if (it == expected_gets.end()) {
+            LOG_ERROR_S("unexpected get request_id "
+                << get_response.request_id());
+        } else if (it->second != get_response.offset()) {
+            LOG_ERROR_S("unexpected data for get request_id "
+                << get_response.request_id()
+                << ", actual " << get_response.offset()
+                << ", expected " << it->second);
+        }
+
+        ++response_count;
 
         return std::string();
     };
@@ -145,9 +196,9 @@ int main(int argc, const char** argv) {
             abort();
         }
 
-        LOG_INFO_S("put_response: " << put_response.ShortDebugString());
+        LOG_DEBUG_S("put_response: " << put_response.ShortDebugString());
 
-        have_response = true;
+        ++response_count;
 
         return std::string();
     };
@@ -184,7 +235,7 @@ int main(int argc, const char** argv) {
         return 3;
     }
 
-    while (!have_response) {
+    while (response_count < request_count) {
         num_ready = epoll_wait(epollfd, events.data(), max_events, timeout);
         for (int i = 0; i < num_ready; i++) {
             VERIFY(events[i].data.fd == socketfd, "fd mismatch");
