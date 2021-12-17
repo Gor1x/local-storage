@@ -35,6 +35,10 @@ constexpr int timeout = 1000;
 ////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, const char** argv) {
+    LOG_DEBUG("Check")
+    LOG_WARN("Check")
+    LOG_INFO("Check")
+    LOG_ERROR("Check")
     /*
      * simplistic arg parsing
      * TODO proper argparse lib
@@ -96,6 +100,11 @@ int main(int argc, const char** argv) {
         }
     }
 
+
+    {
+        LOG_DEBUG("Connected");
+    }
+
     SocketState state;
     state.fd = socketfd;
 
@@ -154,6 +163,10 @@ int main(int argc, const char** argv) {
 
     for (const auto& stage: stages) {
         stage2func.at(stage)();
+    }
+
+    {
+        LOG_DEBUG("Stages ended");
     }
 
     /*
@@ -220,8 +233,13 @@ int main(int argc, const char** argv) {
      */
 
     std::array<struct epoll_event, ::max_events> events;
-
+    {
+        LOG_DEBUG("Start epoll_wait");
+    }
     int num_ready = epoll_wait(epollfd, events.data(), max_events, timeout);
+    {
+        LOG_DEBUG_S("End epoll_wait with " << num_ready);
+    }
     for (int i = 0; i < num_ready; i++) {
         if (events[i].events & EPOLLIN) {
             VERIFY(events[i].data.fd == socketfd, "fd mismatch");
@@ -230,13 +248,27 @@ int main(int argc, const char** argv) {
         }
     }
 
+    {
+        LOG_DEBUG("End verification");
+    }
+
     if (!process_output(state)) {
         LOG_ERROR("failed to send request");
         return 3;
     }
 
+    {
+        LOG_DEBUG("Start getting responses");
+        LOG_DEBUG_S("Got " << response_count << "/" << request_count << " responses")
+    }
     while (response_count < request_count) {
+        {
+            LOG_DEBUG_S("Got " << response_count << "/" << request_count << " responses")
+        }
         num_ready = epoll_wait(epollfd, events.data(), max_events, timeout);
+        {
+            LOG_DEBUG_S("Response with num_ready " << num_ready);
+        }
         for (int i = 0; i < num_ready; i++) {
             VERIFY(events[i].data.fd == socketfd, "fd mismatch");
 
