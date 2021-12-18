@@ -39,6 +39,7 @@ int main(int argc, const char** argv) {
     LOG_WARN("Check")
     LOG_INFO("Check")
     LOG_ERROR("Check")
+    auto start_time = std::chrono::steady_clock::now();
     /*
      * simplistic arg parsing
      * TODO proper argparse lib
@@ -102,7 +103,7 @@ int main(int argc, const char** argv) {
 
 
     {
-        LOG_DEBUG("Connected");
+        LOG_INFO("Connected");
     }
 
     SocketState state;
@@ -166,7 +167,7 @@ int main(int argc, const char** argv) {
     }
 
     {
-        LOG_DEBUG("Stages ended");
+        LOG_INFO("Stages ended");
     }
 
     /*
@@ -233,13 +234,7 @@ int main(int argc, const char** argv) {
      */
 
     std::array<struct epoll_event, ::max_events> events;
-    {
-        LOG_DEBUG("Start epoll_wait");
-    }
     int num_ready = epoll_wait(epollfd, events.data(), max_events, timeout);
-    {
-        LOG_DEBUG_S("End epoll_wait with " << num_ready);
-    }
     for (int i = 0; i < num_ready; i++) {
         if (events[i].events & EPOLLIN) {
             VERIFY(events[i].data.fd == socketfd, "fd mismatch");
@@ -249,7 +244,7 @@ int main(int argc, const char** argv) {
     }
 
     {
-        LOG_DEBUG("End verification");
+        LOG_INFO("End verification");
     }
 
     if (!process_output(state)) {
@@ -258,16 +253,16 @@ int main(int argc, const char** argv) {
     }
 
     {
-        LOG_DEBUG("Start getting responses");
-        LOG_DEBUG_S("Got " << response_count << "/" << request_count << " responses")
+        LOG_INFO("Start getting responses");
+        LOG_INFO_S("Got " << response_count << "/" << request_count << " responses")
     }
     while (response_count < request_count) {
         {
-            LOG_DEBUG_S("Got " << response_count << "/" << request_count << " responses")
+            LOG_INFO_S("Got " << response_count << "/" << request_count << " responses")
         }
         num_ready = epoll_wait(epollfd, events.data(), max_events, timeout);
         {
-            LOG_DEBUG_S("Response with num_ready " << num_ready);
+            LOG_INFO_S("Response with num_ready " << num_ready);
         }
         for (int i = 0; i < num_ready; i++) {
             VERIFY(events[i].data.fd == socketfd, "fd mismatch");
@@ -289,6 +284,8 @@ int main(int argc, const char** argv) {
     }
 
     close(socketfd);
-
+    auto end_time = std::chrono::steady_clock::now();
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    std::cout << elapsed_ms.count() << " ms\n";
     return 0;
 }
