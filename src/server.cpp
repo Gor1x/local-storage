@@ -311,17 +311,21 @@ int main(int argc, const char** argv)
             bool closed = false;
             if (events[i].events & EPOLLIN) {
                 auto state = states.at(fd);
+                LOG_DEBUG("Start process input event");
                 if (!process_input(*state, handler)) {
                     finalize(fd);
                     closed = true;
                 }
+                LOG_DEBUG("End process input event");
             }
 
             if (events[i].events & EPOLLOUT && !closed) {
                 auto state = states.at(fd);
+                LOG_DEBUG("Start process output event");
                 if (!process_output(*state)) {
                     finalize(fd);
                 }
+                LOG_DEBUG("End process output event");
             }
         }
     }
