@@ -4,13 +4,6 @@
 
 using namespace NLogging;
 
-namespace {
-    typedef std::string HTKey;
-    typedef uint64_t HTValue;
-    typedef std::unordered_map<HTKey, HTValue> HashTable;
-    typedef HashTable::iterator iterator;
-} // namespace
-
 
 PersistentHashTable::PersistentHashTable(const std::string &filename) {
     {
@@ -20,9 +13,13 @@ PersistentHashTable::PersistentHashTable(const std::string &filename) {
     needSync = true;
     syncThread = std::thread([&, filename]() {
         while (needSync) {
-            std::lock_guard<std::mutex> g(mutex);
+            std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_TIME));
+            mutex.lock();
+            auto save = storage;
+            mutex.unlock();
+
             std::ofstream file(filename, std::ios_base::out);
-            for (auto &x: storage) {
+            for (auto &x: save) {
                 file << x.first << " " << x.second << "\n";
             }
             file.close();
@@ -36,30 +33,37 @@ PersistentHashTable::~PersistentHashTable() {
 }
 
 iterator PersistentHashTable::begin() {
+    std::lock_guard<std::mutex> g(mutex);
     return storage.begin();
 }
 
 iterator PersistentHashTable::end() {
+    std::lock_guard<std::mutex> g(mutex);
     return storage.end();
 }
 
 iterator PersistentHashTable::find(const HTKey &key) {
+    std::lock_guard<std::mutex> g(mutex);
     return storage.find(key);
 }
 
 HTValue &PersistentHashTable::operator[](const HTKey &key) {
+    std::lock_guard<std::mutex> g(mutex);
     return storage[key];
 }
 
 bool PersistentHashTable::contains(const HTKey &key) {
-    return storage.count(key) == 1;
+    std::lock_guard<std::mutex> g(mutex);
+    return storage.find(key) != end();
 }
 
 void PersistentHashTable::erase(const HTKey &key) {
+    std::lock_guard<std::mutex> g(mutex);
     storage.erase(key);
 }
 
 void PersistentHashTable::clear() {
+    std::lock_guard<std::mutex> g(mutex);
     storage.clear();
 }
 
@@ -75,7 +79,7 @@ void PersistentHashTable::getDataFromSource(const std::string &filename) {
     while (inputFile >> key >> value) {
         storage[key] = value;
         {
-            LOG_INFO_S( "Key " << key << " Value " << value);
+            LOG_DEBUG_S("Key " << key << " Value " << value);
         }
     }
     inputFile.close();

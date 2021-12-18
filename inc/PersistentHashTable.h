@@ -8,14 +8,21 @@
 #include <log.h>
 #include <thread>
 #include <atomic>
+#include <chrono>
+#include <ext/pb_ds/assoc_container.hpp>
+
+
+namespace {
+    typedef std::string HTKey;
+    typedef uint64_t HTValue;
+    typedef std::unordered_map<HTKey, HTValue> HashTable;
+    typedef __gnu_pbds::gp_hash_table<HTKey, HTValue> HashTable2;
+    typedef HashTable2::point_iterator iterator;
+}
 
 
 class PersistentHashTable {
 public:
-    typedef std::string HTKey;
-    typedef uint64_t HTValue;
-    typedef std::unordered_map<HTKey, HTValue> HashTable;
-    typedef HashTable::iterator iterator;
 
     explicit PersistentHashTable(const std::string &filename);
 
@@ -37,8 +44,9 @@ public:
 private:
     mutable std::mutex mutex;
     std::thread syncThread;
-    HashTable storage;
-    const int FLUSH_THRESHOLD = 1000;
+    HashTable2 storage;
+
+    const int SLEEP_TIME = 6000;
     std::atomic_bool needSync;
 
     void getDataFromSource(const std::string &filename);
